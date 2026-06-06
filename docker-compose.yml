@@ -1,0 +1,54 @@
+# docker-compose.yml — Local development infrastructure
+# Phase 2: adds LiveKit server for real-time audio transport
+# Start all: docker compose up -d
+
+services:
+
+  postgres:
+    # PostgreSQL 16 — primary database for all application data
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: voxprep
+      POSTGRES_PASSWORD: voxprep
+      POSTGRES_DB: voxprep
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voxprep"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    # Redis 7 — Celery broker + result backend
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  livekit:
+    # LiveKit server — WebRTC/WebSocket real-time audio transport
+    # --dev flag: disables auth (API key/secret not enforced) — development only
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "7880:7880"    # WebSocket + HTTP
+      - "7881:7881"    # RTC TCP
+      - "7882:7882/udp" # RTC UDP
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7880/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:

@@ -1,20 +1,17 @@
-# Environment files
+# Environment and secrets
 .env
 .env.*
 !.env.example
+!.env.*.example
 
-# Python bytecode/cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual environments
 .venv/
 venv/
 env/
 ENV/
-
-# Test, coverage, and type-checking output
 .pytest_cache/
 .coverage
 .coverage.*
@@ -23,23 +20,33 @@ htmlcov/
 .ruff_cache/
 .pyre/
 .tox/
-
-# Build/package artifacts
 build/
 dist/
 *.egg-info/
 .eggs/
 
-# Runtime/local files
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime/local data
 logs/
 *.log
-*.pid
 *.sqlite
 *.sqlite3
 *.db
+*.pid
 
-# Alembic local/generated artifacts
-migrations/__pycache__/
+# Docker / local overrides
+docker-compose.override.yml
 
 # Editor and OS files
 .vscode/*
@@ -47,4 +54,4 @@ migrations/__pycache__/
 .idea/
 .DS_Store
 Thumbs.db
-tests/
+*.sw?
