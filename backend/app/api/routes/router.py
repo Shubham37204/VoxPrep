@@ -3,9 +3,9 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import sessions
+from app.api.routes import sessions
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/routes")
 
 # Phase 1 / 2 routes
 router.include_router(sessions.router)

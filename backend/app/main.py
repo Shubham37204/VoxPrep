@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.v1.router import router as api_v1_router
+from app.api.routes.router import router as api_router
 from app.config.settings import get_settings
 from app.db.engine import engine
 from app.models import Base
@@ -40,7 +40,7 @@ app = FastAPI(
 )
 
 # Mount all versioned API routes
-app.include_router(api_v1_router)
+app.include_router(api_router)
 
 
 @app.get("/health", tags=["ops"])
