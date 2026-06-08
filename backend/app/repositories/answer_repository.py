@@ -113,4 +113,15 @@ class AnswerRepository:
         answer_map: dict[str, Answer] = {a.question_id: a for a in answer_result.scalars().all()}
 
         return [(q, answer_map.get(q.id)) for q in questions]
-    
+
+
+    async def delete_answer(self, answer_id: str) -> None:
+        """
+        Delete an answer row — used by compensating transaction in SessionOrchestrationService.
+        Called when post-answer graph/DB operations fail, to avoid orphaned answers.
+        """
+        from sqlalchemy import delete as sa_delete
+        await self._db.execute(
+            sa_delete(Answer).where(Answer.id == answer_id)
+        )
+        await self._db.commit()
