@@ -1,49 +1,85 @@
 # main.py — FastAPI application factory
-# Lifespan: creates/disposes DB engine around server lifetime.
-# Router: mounts all v1 API routes under /api/v1.
+# Phase 9: wires observability (structlog, Prometheus, OTel) into lifespan.
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
 from app.api.routes.router import router as api_router
 from app.config.settings import get_settings
 from app.db.engine import engine
 from app.models import Base
+from app.observability.logging import (
+    configure_logging,
+    get_logger,
+)
+
+from app.observability.tracing import (
+    configure_tracing,
+    shutdown_tracing,
+)
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── Startup ───────────────────────────────────────────────────
-    # Create all tables if they don't exist — for development convenience
-    # In production, use Alembic migrations instead (never create_all in prod)
+    # ── Startup ────────────────────────────────────────────────────
+    configure_logging(log_level=settings.LOG_LEVEL)
+    logger = get_logger(__name__)
+
+    configure_tracing(
+        service_name="voxprep",
+        # Dev: print spans to console so you can see traces locally
+        # Prod: ship to OTel collector instead
+        export_to_console=(settings.APP_ENV == "development"),
+        endpoint=settings.OTEL_ENDPOINT if settings.is_production else None,
+    )
+
+    logger.info("voxprep_startup", env=settings.APP_ENV, version=app.version)
+
     if settings.APP_ENV == "development":
+        # Create tables on startup in dev — use Alembic in production
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
     yield
 
-    # ── Shutdown ──────────────────────────────────────────────────
-    # Dispose engine — closes all pooled connections cleanly
+    # ── Shutdown ────────────────────────────────────────────────────
+    shutdown_tracing()
     await engine.dispose()
+    logger.info("voxprep_shutdown")
 
 
 app = FastAPI(
     title="VoxPrep API",
-    version="0.2.0",
+    version="0.3.0",
     description="AI Voice Interview Coach — Backend API",
     lifespan=lifespan,
     docs_url=None if settings.is_production else "/docs",
     redoc_url=None if settings.is_production else "/redoc",
 )
 
-# Mount all versioned API routes
 app.include_router(api_router)
 
 
 @app.get("/health", tags=["ops"])
 async def health_check():
-    # Liveness probe — used by Docker HEALTHCHECK and load balancer health checks
+    """Liveness probe — Docker HEALTHCHECK and load balancer health checks."""
     return {"status": "ok", "env": settings.APP_ENV, "version": app.version}
+
+
+@app.get("/metrics", tags=["ops"])
+async def prometheus_metrics():
+    """
+    Prometheus scrape endpoint.
+    Returns all registered metrics in text exposition format.
+    Scraped by Prometheus server (default interval: 15s).
+    Add to prometheus.yml:
+      scrape_configs:
+        - job_name: voxprep
+          static_configs:
+            - targets: ['host:8000']
+    """
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
