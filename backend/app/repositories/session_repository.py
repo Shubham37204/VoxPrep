@@ -89,8 +89,15 @@ class SessionRepository:
         elif new_status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
             session.ended_at = now
 
-        # Log every transition — this is how you debug "interview froze at Q3"
-        event_type = _TRANSITION_EVENTS.get(new_status, SessionEventType.SESSION_STARTED)
+        # FIX: explicit lookup — silent fallback to SESSION_STARTED would log wrong
+        # event type and corrupt the audit trail with no error raised.
+        event_type = _TRANSITION_EVENTS.get(new_status)
+        if event_type is None:
+            raise ValueError(
+                f"No event type mapping for status {new_status!r} — "
+                f"add it to _TRANSITION_EVENTS"
+            )
+
         await self._log_event(
             session_id=session_id,
             event_type=event_type,
