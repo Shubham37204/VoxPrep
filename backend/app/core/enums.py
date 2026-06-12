@@ -1,5 +1,3 @@
-# enums.py — All application-wide enums and state machine definitions
-
 from enum import Enum
 
 
@@ -11,18 +9,14 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"   # Finished normally — terminal
     FAILED = "failed"         # Unrecoverable failure — terminal
 
-
-# Retry is a recoverable intermediate state — transitions back to ACTIVE on success,
-# to FAILED only after max retries exhausted.
 ALLOWED_TRANSITIONS: dict[SessionStatus, set[SessionStatus]] = {
     SessionStatus.CREATED:   {SessionStatus.ACTIVE, SessionStatus.FAILED},
     SessionStatus.ACTIVE:    {SessionStatus.PAUSED, SessionStatus.RETRYING,
                               SessionStatus.COMPLETED, SessionStatus.FAILED},
     SessionStatus.PAUSED:    {SessionStatus.ACTIVE, SessionStatus.FAILED},
-    # Retry succeeded or gave up
     SessionStatus.RETRYING:  {SessionStatus.ACTIVE, SessionStatus.FAILED},
-    SessionStatus.COMPLETED: set(),   # Terminal
-    SessionStatus.FAILED:    set(),   # Terminal
+    SessionStatus.COMPLETED: set(), 
+    SessionStatus.FAILED:    set(),  
 }
 
 
@@ -47,12 +41,12 @@ class SessionEventType(str, Enum):
     SESSION_STARTED = "session_started"
     SESSION_PAUSED = "session_paused"
     SESSION_RESUMED = "session_resumed"
-    SESSION_RETRYING = "session_retrying"       # Transient failure, retrying
+    SESSION_RETRYING = "session_retrying"     
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
     QUESTION_ASKED = "question_asked"
     ANSWER_RECEIVED = "answer_received"
     SCORE_GENERATED = "score_generated"
     COACH_INTERVENTION = "coach_intervention"
-    RETRY_SUCCEEDED = "retry_succeeded"         # Retry resolved successfully
-    RETRY_EXHAUSTED = "retry_exhausted"         # All retries used up
+    RETRY_SUCCEEDED = "retry_succeeded"        
+    RETRY_EXHAUSTED = "retry_exhausted"        

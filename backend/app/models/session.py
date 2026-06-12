@@ -1,6 +1,3 @@
-# session.py — SQLAlchemy model for interview sessions
-# last_seen_at: updated by heartbeat endpoint — used to detect abandoned sessions
-
 import uuid
 from datetime import datetime
 
@@ -24,7 +21,6 @@ class Session(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     difficulty: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    # Status managed exclusively by SessionRepository.transition_status()
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=SessionStatus.CREATED.value
     )
@@ -36,9 +32,6 @@ class Session(Base):
         DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True)
-
-    # Updated by POST /sessions/{id}/heartbeat — detect abandoned sessions.
-    # If now() - last_seen_at > SESSION_TIMEOUT, a background job marks session FAILED.
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

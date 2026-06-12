@@ -1,6 +1,3 @@
-# main.py — FastAPI application factory
-# Phase 9: wires observability (structlog, Prometheus, OTel) into lifespan.
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -30,8 +27,6 @@ async def lifespan(app: FastAPI):
 
     configure_tracing(
         service_name="voxprep",
-        # Dev: print spans to console so you can see traces locally
-        # Prod: ship to OTel collector instead
         export_to_console=(settings.APP_ENV == "development"),
         endpoint=settings.OTEL_ENDPOINT if settings.is_production else None,
     )
@@ -39,13 +34,11 @@ async def lifespan(app: FastAPI):
     logger.info("voxprep_startup", env=settings.APP_ENV, version=app.version)
 
     if settings.APP_ENV == "development":
-        # Create tables on startup in dev — use Alembic in production
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
     yield
 
-    # ── Shutdown ────────────────────────────────────────────────────
     shutdown_tracing()
     await engine.dispose()
     logger.info("voxprep_shutdown")

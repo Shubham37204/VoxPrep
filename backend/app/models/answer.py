@@ -1,7 +1,3 @@
-# answer.py — SQLAlchemy model for answers
-# UniqueConstraint on question_id: one answer per question — prevents duplicate submissions.
-# If client calls /respond twice for same question, second call gets IntegrityError → 409.
-
 import uuid
 from datetime import datetime
 
@@ -14,8 +10,6 @@ from app.models import Base
 class Answer(Base):
     __tablename__ = "answers"
     __table_args__ = (
-        # Duplicate submission protection — enforced at DB level, not just app level.
-        # Same question_id submitted twice → IntegrityError before any LLM call is made.
         UniqueConstraint("question_id", name="uq_answers_question_id"),
     )
 

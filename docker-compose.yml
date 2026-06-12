@@ -3,7 +3,6 @@
 # Start all: docker compose up -d
 
 services:
-
   postgres:
     # PostgreSQL 16 — primary database for all application data
     image: postgres:16-alpine
@@ -43,8 +42,8 @@ services:
     restart: unless-stopped
     command: --dev --bind 0.0.0.0
     ports:
-      - "7880:7880"    # WebSocket + HTTP
-      - "7881:7881"    # RTC TCP
+      - "7880:7880" # WebSocket + HTTP
+      - "7881:7881" # RTC TCP
       - "7882:7882/udp" # RTC UDP
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7880/ || exit 1"]
@@ -52,5 +51,19 @@ services:
       timeout: 5s
       retries: 3
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  qdrant_data:

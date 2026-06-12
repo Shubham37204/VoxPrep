@@ -1,15 +1,3 @@
-# interviewer.py — InterviewerNode: generates the next interview question
-#
-# INPUT:  role, difficulty, qa_history, last_scores, sequence number
-# OUTPUT: dict with question text, topic, reasoning
-#
-# Key routing logic (pre-LangGraph):
-#   overall_score < 6 → probe same topic (follow-up)
-#   overall_score >= 6 → move to new topic
-#   sequence == 1 → no history, pick opening question
-#
-# temperature=0.7 — questions should vary across sessions, not be identical every time
-
 import json
 
 from groq import AsyncGroq
@@ -71,7 +59,6 @@ class InterviewerNode:
         Raises:
             ValueError: If LLM returns malformed JSON or missing 'question' field.
         """
-        # Build conversation history context for the LLM
         history_lines = []
         for qa in qa_history:
             history_lines.append(f"Q{qa['sequence']}: {qa['question_text']}")
@@ -106,7 +93,7 @@ class InterviewerNode:
                 {"role": "user", "content": user_prompt},
             ],
             response_format={"type": "json_object"},
-            temperature=0.7,    # Higher than evaluator — questions should vary
+            temperature=0.7,   
             max_tokens=300,
         )
 

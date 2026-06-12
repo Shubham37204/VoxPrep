@@ -10,11 +10,9 @@ from app.observability.logging import get_logger
 settings = get_settings()
 logger = get_logger(__name__)
 
-# OpenAI TTS — high quality, low latency, works well for interview questions.
-# Swap voice/model via settings without touching this service.
 _TTS_URL = "https://api.openai.com/v1/audio/speech"
-_DEFAULT_VOICE = "alloy"     # Neutral, clear — good for interview context
-_DEFAULT_MODEL = "tts-1"     # tts-1-hd for higher quality at 2x latency
+_DEFAULT_VOICE = "alloy"   
+_DEFAULT_MODEL = "tts-1"   
 
 
 class TTSService:

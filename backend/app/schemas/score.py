@@ -1,5 +1,3 @@
-# schemas/score.py — Pydantic shapes for score and evaluation endpoints
-
 from datetime import datetime
 from pydantic import BaseModel
 

@@ -1,15 +1,3 @@
-# evaluator.py — EvaluatorNode: scores a candidate's answer using Groq LLM
-#
-# INPUT:  question text + transcript + role + difficulty
-# OUTPUT: dict with technical_score, structure_score, relevance_score, overall_score,
-#         reasoning, follow_up_needed
-#
-# Design decisions:
-#   - temperature=0.1 for consistent, reproducible scoring (not creative)
-#   - response_format=json_object forces valid JSON — no regex parsing needed
-#   - Validates required fields before returning — never trust raw LLM output blindly
-#   - follow_up_needed flag: InterviewerNode reads this to decide next question topic
-
 import json
 
 from groq import AsyncGroq
@@ -49,7 +37,6 @@ class EvaluatorNode:
     """
 
     def __init__(self) -> None:
-        # Groq client reused across calls — do not instantiate per request
         self._client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
     async def evaluate(
@@ -76,7 +63,6 @@ class EvaluatorNode:
             ValueError: If LLM returns malformed JSON or missing required fields.
         """
         if not transcript.strip():
-            # No point calling LLM for an empty answer — score zeros and flag follow-up
             return {
                 "technical_score": 1,
                 "structure_score": 1,
@@ -100,7 +86,7 @@ class EvaluatorNode:
                 {"role": "user", "content": user_prompt},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,    # Low — scoring should be consistent, not creative
+            temperature=0.1,   
             max_tokens=400,
         )
 
@@ -111,13 +97,11 @@ class EvaluatorNode:
         except json.JSONDecodeError as exc:
             raise ValueError(f"EvaluatorNode: invalid JSON from LLM: {raw!r}") from exc
 
-        # Validate required fields — LLM can hallucinate missing keys even with json_object
         required = {"technical_score", "structure_score", "relevance_score", "overall_score", "reasoning"}
         missing = required - set(scores.keys())
         if missing:
             raise ValueError(f"EvaluatorNode: LLM response missing fields: {missing}. Got: {scores}")
 
-        # Clamp scores to valid range — LLM occasionally returns 0 or 11
         for field in ("technical_score", "structure_score", "relevance_score", "overall_score"):
             scores[field] = max(1, min(10, int(scores[field])))
 

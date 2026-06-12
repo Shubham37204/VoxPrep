@@ -8,9 +8,6 @@ def configure_logging(log_level: str = "INFO") -> None:
         level=getattr(logging, log_level.upper(), logging.INFO),
         format="%(message)s",
     )
-
-    # Suppress noisy third-party loggers that inherit root INFO level.
-    # Raw SQL has no place in application logs — enable only when debugging.
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)

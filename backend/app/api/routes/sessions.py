@@ -1,16 +1,14 @@
-# sessions.py — API routes
-# BUG FIX #9: POST /sessions/{id}/heartbeat — updates last_seen_at
-# BUG FIX #2: GET  /sessions/{id}/state — backend resume, no frontend storage needed
-
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError                       
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.nodes.coach import CoachNode
 from app.agents.nodes.evaluator import EvaluatorNode
 from app.agents.nodes.interviewer import InterviewerNode
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 from app.core.enums import SessionStatus
 from app.core.exceptions import InvalidStateTransitionError, SessionNotFoundError
 from app.models.question import Question
@@ -42,12 +40,14 @@ def _get_stt():
     return _stt_service
 
 
-# ── Session lifecycle ─────────────────────────────────────────────
-
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(payload: SessionCreateRequest, db: AsyncSession = Depends(get_db)):
+async def create_session(
+    payload: SessionCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     return await SessionRepository(db).create(
-        user_id=PLACEHOLDER_USER_ID,
+        user_id=current_user.id,
         role=payload.role.value,
         difficulty=payload.difficulty.value,
     )
@@ -71,8 +71,6 @@ async def start_session(session_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail=str(e))
 
 
-# ── Bug fix #9: Heartbeat ─────────────────────────────────────────
-
 @router.post("/{session_id}/heartbeat", status_code=status.HTTP_204_NO_CONTENT)
 async def heartbeat(session_id: str, db: AsyncSession = Depends(get_db)):
     """
@@ -86,8 +84,6 @@ async def heartbeat(session_id: str, db: AsyncSession = Depends(get_db)):
     except SessionNotFoundError:
         raise HTTPException(status_code=404, detail="Session not found")
 
-
-# ── Bug fix #2: Backend resume endpoint ───────────────────────────
 
 class SessionStateResponse(BaseModel):
     session_id: str
@@ -118,7 +114,6 @@ async def get_session_state(session_id: str, db: AsyncSession = Depends(get_db))
     answer_repo = AnswerRepository(db)
     pairs = await answer_repo.get_answers_for_session(session_id)
 
-    # Find the last question that has NO answer — that's the current question
     current_q = None
     for q, a in pairs:
         if a is None:
@@ -127,7 +122,6 @@ async def get_session_state(session_id: str, db: AsyncSession = Depends(get_db))
 
     questions_answered = sum(1 for _, a in pairs if a is not None)
 
-    # Last 5 session events for client-side debugging / resume context
     events_result = await db.execute(
         select(SessionEvent)
         .where(SessionEvent.session_id == session_id)
@@ -152,8 +146,6 @@ async def get_session_state(session_id: str, db: AsyncSession = Depends(get_db))
         recent_events=recent_events,
     )
 
-
-# ── Phase 5: LangGraph endpoints ─────────────────────────────────
 
 class BeginResponse(BaseModel):
     question_id: str
@@ -211,14 +203,11 @@ async def respond_to_question(
             transcript=payload.transcript,
             latency_ms=payload.latency_ms,
         )
+    except IntegrityError:                                     
+        raise HTTPException(status_code=409, detail="Answer already submitted for this question")
     except Exception as e:
-        from sqlalchemy.exc import IntegrityError
-        if isinstance(e, IntegrityError):
-            raise HTTPException(status_code=409, detail="Answer already submitted for this question")
         raise HTTPException(status_code=502, detail=f"Error: {e}")
 
-
-# ── Phase 2-4 direct endpoints ────────────────────────────────────
 
 @router.post("/{session_id}/transcribe", response_model=TranscribeResponse)
 async def transcribe_answer(

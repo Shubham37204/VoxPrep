@@ -1,6 +1,8 @@
-# router.py — Mounts all sub-routers onto the /api/routes prefix
 from fastapi import APIRouter
 from app.api.routes import sessions
+from app.api.routes import auth
 
-router = APIRouter(prefix="/api/routes")
-router.include_router(sessions.router)
+router = APIRouter()         
+
+router.include_router(sessions.router)   
+router.include_router(auth.router)      

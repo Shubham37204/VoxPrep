@@ -1,8 +1,3 @@
-# state.py — LangGraph agent state definition
-# InterviewState is the single object passed through all graph nodes.
-# Each node returns a partial dict — LangGraph merges it into the current state.
-# TypedDict enforces structure at type-check time; extra keys are ignored at runtime.
-
 from typing import TypedDict
 
 
@@ -48,3 +43,4 @@ class InterviewState(TypedDict):
 
     # True when current_sequence > MAX_QUESTIONS — triggers END routing
     is_complete: bool
+    

@@ -1,5 +1,3 @@
-# schemas/answer.py — Pydantic shapes for question and answer endpoints
-
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -25,7 +23,6 @@ class AnswerResponse(BaseModel):
 
 
 class TranscribeResponse(BaseModel):
-    # Returned after submitting audio to the /transcribe endpoint
     transcript: str
     latency_ms: int
-    answer_id: str          # FK stored in DB — client can use this to poll scores later
+    answer_id: str          

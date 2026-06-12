@@ -1,7 +1,3 @@
-# feedback_repository.py — DB reads and writes for communication feedback
-# Kept separate from answer_repository — feedback has its own query patterns
-# (session summaries, aggregate stats) that would clutter AnswerRepository.
-
 import uuid
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,7 +68,6 @@ class FeedbackRepository:
             "avg_communication_score": round(float(row.avg_comm or 0), 1),
             "total_filler_count": int(row.total_fillers or 0),
             "total_word_count": int(row.total_words or 0),
-            # Filler rate: what % of words were fillers — useful metric
             "filler_rate_percent": round(
                 (int(row.total_fillers or 0) / max(int(row.total_words or 1), 1)) * 100, 1
             ),

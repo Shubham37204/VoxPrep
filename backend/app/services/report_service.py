@@ -68,7 +68,6 @@ class ReportService:
         if not answered:
             raise ValueError(f"No completed answers for session {session_id}")
 
-        # Load scores and feedback for each answer
         qa_records = []
         total_technical = total_structure = total_relevance = total_overall = 0
         total_fillers = 0
@@ -119,7 +118,6 @@ class ReportService:
             "questions_answered": count,
         }
 
-        # LLM narrative synthesis
         narrative = await self._synthesize_narrative(
             role=session.role,
             difficulty=session.difficulty,
@@ -155,7 +153,7 @@ class ReportService:
                 {"role": "system", "content": _REPORT_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.3,     # Low temp — consistent structured output
+            temperature=0.3,     
             max_tokens=1024,
         )
 
@@ -168,7 +166,6 @@ class ReportService:
                 session_id="unknown",
                 raw_preview=raw[:200],
             )
-            # Fallback — return aggregate only, skip narrative
             return {
                 "overall_score": aggregate["avg_overall"],
                 "technical_summary": "Report generation failed — raw scores available.",

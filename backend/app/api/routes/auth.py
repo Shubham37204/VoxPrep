@@ -39,8 +39,6 @@ async def login(payload: UserLoginRequest, db: AsyncSession = Depends(get_db)):
     repo = UserRepository(db)
     user = await repo.get_by_email(payload.email)
 
-    # Constant-time path: verify_password runs even on None user to prevent
-    # timing-based email enumeration attacks
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 

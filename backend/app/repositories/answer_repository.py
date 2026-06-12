@@ -1,7 +1,3 @@
-# answer_repository.py — DB reads and writes for questions, answers, and scores
-# Both Question and Answer are here — tightly coupled, always queried together.
-# Score is here too — score only exists because an answer exists.
-
 import uuid
 
 from sqlalchemy import select

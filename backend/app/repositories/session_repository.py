@@ -1,7 +1,3 @@
-# session_repository.py — DB reads and writes for sessions and session_events
-# Now writes session_events on every status transition (bug fix #10).
-# Adds update_last_seen() for heartbeat support (bug fix #9).
-
 import uuid
 from datetime import datetime, timezone
 
@@ -14,7 +10,6 @@ from app.models.session import Session
 from app.models.session_event import SessionEvent
 
 
-# Map status transitions → event types for automatic event logging
 _TRANSITION_EVENTS: dict[SessionStatus, SessionEventType] = {
     SessionStatus.ACTIVE:    SessionEventType.SESSION_STARTED,
     SessionStatus.PAUSED:    SessionEventType.SESSION_PAUSED,
@@ -39,9 +34,7 @@ class SessionRepository:
             status=SessionStatus.CREATED.value,
         )
         self._db.add(session)
-        await self._db.flush()   # Get session.id without committing yet
-
-        # Log creation event — every session lifecycle step is auditable
+        await self._db.flush()  
         await self._log_event(
             session_id=session.id,
             event_type=SessionEventType.SESSION_CREATED,
@@ -85,12 +78,10 @@ class SessionRepository:
         now = datetime.now(timezone.utc)
         if new_status == SessionStatus.ACTIVE and session.started_at is None:
             session.started_at = now
-            session.last_seen_at = now   # Initialize last_seen on first activation
+            session.last_seen_at = now  
         elif new_status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
             session.ended_at = now
 
-        # FIX: explicit lookup — silent fallback to SESSION_STARTED would log wrong
-        # event type and corrupt the audit trail with no error raised.
         event_type = _TRANSITION_EVENTS.get(new_status)
         if event_type is None:
             raise ValueError(
@@ -162,4 +153,3 @@ class SessionRepository:
             payload=payload,
         )
         self._db.add(event)
-        # Note: NO commit here — caller commits. Allows batching with other ops.

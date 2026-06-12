@@ -1,5 +1,3 @@
-# schemas/feedback.py — Pydantic shapes for feedback (communication coaching) endpoints
-
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -20,7 +18,6 @@ class FeedbackResponse(BaseModel):
 
 
 class SessionCommunicationSummary(BaseModel):
-    # Returned by the session summary endpoint — aggregated from all answers
     avg_clarity_score: float
     avg_confidence_score: float
     avg_communication_score: float

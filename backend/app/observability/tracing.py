@@ -23,11 +23,6 @@ def configure_tracing(
         export_to_console: Print completed spans to stdout — development only.
     """
     global _provider
-
-    # FIX: guard against double-init. OTel raises a warning and the second
-    # provider is silently ignored, leaving the process with a misconfigured
-    # tracer. shutdown_tracing() resets this flag, so re-init after
-    # intentional shutdown still works correctly.
     if _provider is not None:
         return
 
@@ -35,16 +30,12 @@ def configure_tracing(
     provider = TracerProvider(resource=resource)
 
     if export_to_console:
-        # Prints spans as JSON when they complete — useful for seeing what's traced
         provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
     elif endpoint:
-        # Ships spans to a real collector — Jaeger, Grafana Tempo, or Datadog
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         provider.add_span_processor(
             BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
         )
-    # If neither: NoOp — spans created but immediately discarded (zero overhead)
-
     trace.set_tracer_provider(provider)
     _provider = provider
 
@@ -62,4 +53,4 @@ def shutdown_tracing() -> None:
     global _provider
     if _provider:
         _provider.shutdown()
-        _provider = None  # Clears guard — configure_tracing() can be called again if needed
+        _provider = None

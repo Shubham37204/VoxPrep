@@ -10,5 +10,3 @@ class QuestionResponse(BaseModel):
     session_id: str
     text: str
     sequence: int
-
-    

@@ -1,19 +1,3 @@
-# coach.py — CoachNode: analyzes communication quality of a candidate's answer
-#
-# WHY this is separate from EvaluatorNode:
-#   Evaluator judges WHAT was said (technical content).
-#   Coach judges HOW it was said (communication quality).
-#   Keeping them separate means scores don't bleed into each other.
-#
-# WHY NOT in the critical path:
-#   User needs the next question fast. Coach feedback is surfaced at session end.
-#   Coach result doesn't affect what question comes next — Evaluator does.
-#
-# TWO-STAGE ANALYSIS:
-#   Stage 1 — regex (sync, free): filler word detection, word count
-#   Stage 2 — LLM (async, Groq): clarity, confidence, pace, recommendations
-#   Both run and results are merged before returning.
-
 import json
 import re
 
@@ -23,8 +7,6 @@ from app.config.settings import get_settings
 
 settings = get_settings()
 
-# Filler words that are unambiguously fillers in spoken English.
-# "like", "actually", "so" are excluded — too often used legitimately in technical speech.
 _FILLER_PATTERNS: list[re.Pattern] = [
     re.compile(r'\bum+\b', re.IGNORECASE),          # um, umm, ummm
     re.compile(r'\buh+\b', re.IGNORECASE),           # uh, uhh
@@ -98,7 +80,7 @@ class CoachNode:
                 {"role": "user", "content": user_prompt},
             ],
             response_format={"type": "json_object"},
-            temperature=0.2,    # Slightly above evaluator — recommendations should be specific but not robotically identical
+            temperature=0.2,    
             max_tokens=400,
         )
 
@@ -114,16 +96,13 @@ class CoachNode:
         if missing:
             raise ValueError(f"CoachNode: missing fields in LLM response: {missing}")
 
-        # Validate pace_assessment is one of the allowed values
         valid_pace = {"too_slow", "appropriate", "too_fast_or_rambling"}
         if result["pace_assessment"] not in valid_pace:
-            result["pace_assessment"] = "appropriate"   # Safe fallback — don't crash on minor LLM deviation
+            result["pace_assessment"] = "appropriate"   
 
-        # Clamp scores
         for field in ("clarity_score", "confidence_score", "overall_communication_score"):
             result[field] = max(1, min(10, int(result[field])))
 
-        # Ensure recommendations is a list
         if not isinstance(result["recommendations"], list):
             result["recommendations"] = [str(result["recommendations"])]
 

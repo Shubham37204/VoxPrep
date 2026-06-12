@@ -1,25 +1,3 @@
-# graph.py — LangGraph interview graph definition
-#
-# WHY LangGraph here (not plain Python functions):
-#   - Conditional routing based on score (follow-up vs new topic) is a graph problem
-#   - Built-in checkpointer persists full conversation state between HTTP requests
-#   - interrupt_before lets the graph pause mid-flow and wait for user input
-#   - When auth/multi-agent complexity grows, graph branching scales naturally
-#
-# GRAPH FLOW:
-#   First invocation (begin):
-#     START → generate_question → [INTERRUPT] ← client receives Q1
-#
-#   Subsequent invocations (respond):
-#     [RESUME] → process_answer → route_after_answer:
-#       ├── "generate_question" → generate_question → [INTERRUPT] ← client receives Q2
-#       └── "end" → END ← session complete
-#
-# STATE PERSISTENCE:
-#   MemorySaver stores state in RAM — sufficient for Phase 5.
-#   Production upgrade path: replace with langgraph.checkpoint.postgres.AsyncPostgresSaver
-#   using the same DATABASE_URL. No graph code changes required.
-
 import asyncio
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -30,10 +8,8 @@ from app.agents.nodes.evaluator import EvaluatorNode
 from app.agents.nodes.interviewer import InterviewerNode
 from app.agents.state import InterviewState, QAPair
 
-# Max questions before session auto-completes
 MAX_QUESTIONS = 5
 
-# Node singletons — instantiated once, reused across all graph invocations
 _evaluator = EvaluatorNode()
 _interviewer = InterviewerNode()
 _coach = CoachNode()
@@ -54,7 +30,7 @@ async def generate_question_node(state: InterviewState) -> dict:
     )
 
     new_qa: QAPair = {
-        "question_id": "",              # Filled in by service layer after DB persist
+        "question_id": "",              
         "question_text": result["question"],
         "sequence": state["current_sequence"],
         "answer_id": None,
@@ -85,7 +61,6 @@ async def process_answer_node(state: InterviewState) -> dict:
     transcript = last_qa.get("transcript") or ""
     question_text = last_qa["question_text"]
 
-    # Parallel LLM calls — core Phase 5 feature
     eval_result, coach_result = await asyncio.gather(
         _evaluator.evaluate(
             question=question_text,
@@ -96,7 +71,6 @@ async def process_answer_node(state: InterviewState) -> dict:
         _coach.analyze(transcript=transcript),
     )
 
-    # Merge eval scores into the last QAPair
     updated_history = list(state["qa_history"])
     updated_history[-1] = {**last_qa, "scores": eval_result}
 
@@ -134,9 +108,6 @@ def build_interview_graph():
 
     builder.set_entry_point("generate_question")
 
-    # generate_question always flows to process_answer
-    # But interrupt_before=["process_answer"] means the graph PAUSES here
-    # and waits for external state update (user's transcript)
     builder.add_edge("generate_question", "process_answer")
 
     # After processing: route to next question or end
@@ -153,11 +124,7 @@ def build_interview_graph():
 
     return builder.compile(
         checkpointer=memory,
-        # Graph pauses BEFORE process_answer — gives service layer time to inject transcript
         interrupt_before=["process_answer"],
     )
 
-
-# Module-level singleton — thread_id (session_id) isolates state between sessions
-# MemorySaver is RAM-only — replace with AsyncPostgresSaver for production persistence
 interview_graph = build_interview_graph()

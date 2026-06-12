@@ -1,7 +1,3 @@
-# exceptions.py — Custom application exceptions
-# Using typed exceptions instead of generic ValueError/RuntimeError
-# makes error handling explicit and avoids accidental catch-alls.
-
 class VoxPrepError(Exception):
     """Base exception for all VoxPrep application errors."""
     pass
