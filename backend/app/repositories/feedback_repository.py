@@ -10,10 +10,17 @@ class FeedbackRepository:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
 
-    async def create(self, answer_id: str, data: dict) -> Feedback:
+    async def create(
+        self,
+        answer_id: str,
+        data: dict,
+        commit: bool = True,
+    ) -> Feedback:
         """
         Persist CoachNode output as a Feedback row.
         data must contain all required keys from CoachNode.analyze() output.
+
+        commit=False: caller owns commit boundary (Phase 3 atomic block).
         """
         feedback = Feedback(
             id=str(uuid.uuid4()),
@@ -27,8 +34,10 @@ class FeedbackRepository:
             overall_communication_score=data["overall_communication_score"],
         )
         self._db.add(feedback)
-        await self._db.commit()
-        await self._db.refresh(feedback)
+        await self._db.flush()
+        if commit:
+            await self._db.commit()
+            await self._db.refresh(feedback)
         return feedback
 
     async def get_by_answer(self, answer_id: str) -> Feedback | None:
@@ -72,3 +81,4 @@ class FeedbackRepository:
                 (int(row.total_fillers or 0) / max(int(row.total_words or 1), 1)) * 100, 1
             ),
         }
+    

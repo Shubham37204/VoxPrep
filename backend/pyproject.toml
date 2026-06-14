@@ -13,11 +13,13 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "starlette>=0.41.0",
-    "python-multipart>=0.0.20",      # file uploads
+    "python-multipart>=0.0.20",
 
     # ── Database ──────────────────────────────────────────────────
     "sqlalchemy>=2.0.36",
-    "asyncpg>=0.30.0",               # async postgres driver
+    "asyncpg>=0.30.0",                        # SQLAlchemy async driver
+    "psycopg[async]>=3.1",                    # psycopg3 — AsyncPostgresSaver requires this
+    "langgraph-checkpoint-postgres>=2.0.0",   # AsyncPostgresSaver implementation
     "alembic>=1.14.0",
 
     # ── Validation / Settings ─────────────────────────────────────
@@ -28,7 +30,7 @@ dependencies = [
     # ── Auth ──────────────────────────────────────────────────────
     "python-jose[cryptography]>=3.5.0",
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt==4.0.1",                 # pinned — passlib 1.7.4 incompatible with bcrypt >= 4.1
+    "bcrypt==4.0.1",                          # pinned — passlib 1.7.4 incompatible with bcrypt >= 4.1
 
     # ── AI / LLM ─────────────────────────────────────────────────
     "groq>=0.13.0",
@@ -57,7 +59,7 @@ dependencies = [
     # ── Serialization ─────────────────────────────────────────────
     "orjson>=3.11.0",
 
-    # ── LiveKit ───────────────────────────────────────────────────
+    # ── LiveKit (post-MVP) ────────────────────────────────────────
     "livekit>=0.19.0",
     "livekit-api>=0.8.0",
 ]

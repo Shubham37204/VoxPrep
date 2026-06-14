@@ -9,9 +9,10 @@ from app.config.settings import get_settings
 from app.db.engine import AsyncSessionFactory
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from app.services.session_service import SessionOrchestrationService
 
 settings = get_settings()
-_bearer = HTTPBearer(auto_error=False)  
+_bearer = HTTPBearer(auto_error=False)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -50,3 +51,22 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
+
+async def get_session_service(
+    db: AsyncSession = Depends(get_db),
+) -> SessionOrchestrationService:
+    """
+    Dependency that constructs SessionOrchestrationService with both:
+      - db: the request-scoped AsyncSession (Phase 1 + compensating delete)
+      - session_factory: AsyncSessionFactory (Phase 3 fresh session)
+
+    Why inject session_factory here and not inside the service:
+      - SessionOrchestrationService should not import from db.engine directly
+      - Keeps service layer decoupled from infrastructure
+      - Makes testing trivial — pass a mock factory in tests
+    """
+    return SessionOrchestrationService(
+        db=db,
+        session_factory=AsyncSessionFactory,
+    )

@@ -34,7 +34,7 @@ class SessionRepository:
             status=SessionStatus.CREATED.value,
         )
         self._db.add(session)
-        await self._db.flush()  
+        await self._db.flush()
         await self._log_event(
             session_id=session.id,
             event_type=SessionEventType.SESSION_CREATED,
@@ -59,11 +59,14 @@ class SessionRepository:
         session_id: str,
         new_status: SessionStatus,
         payload: dict | None = None,
+        commit: bool = True,
     ) -> Session:
         """
         Validate and apply a status transition.
         Writes a session_event row for every transition — automatic audit trail.
         Raises InvalidStateTransitionError if transition is not in ALLOWED_TRANSITIONS.
+
+        commit=False: caller owns the commit boundary (Phase 3 atomic block).
         """
         session = await self.get_by_id(session_id)
         current = SessionStatus(session.status)
@@ -78,7 +81,7 @@ class SessionRepository:
         now = datetime.now(timezone.utc)
         if new_status == SessionStatus.ACTIVE and session.started_at is None:
             session.started_at = now
-            session.last_seen_at = now  
+            session.last_seen_at = now
         elif new_status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
             session.ended_at = now
 
@@ -95,8 +98,10 @@ class SessionRepository:
             payload=payload,
         )
 
-        await self._db.commit()
-        await self._db.refresh(session)
+        await self._db.flush()
+        if commit:
+            await self._db.commit()
+            await self._db.refresh(session)
         return session
 
     async def update_last_seen(self, session_id: str) -> None:
@@ -109,32 +114,56 @@ class SessionRepository:
         session.last_seen_at = datetime.now(timezone.utc)
         await self._db.commit()
 
-    async def log_question_event(self, session_id: str, question_id: str, sequence: int) -> None:
+    async def log_question_event(
+        self,
+        session_id: str,
+        question_id: str,
+        sequence: int,
+        commit: bool = True,
+    ) -> None:
         """Log QUESTION_ASKED event — called by SessionOrchestrationService."""
         await self._log_event(
             session_id=session_id,
             event_type=SessionEventType.QUESTION_ASKED,
             payload={"question_id": question_id, "sequence": sequence},
         )
-        await self._db.commit()
+        await self._db.flush()
+        if commit:
+            await self._db.commit()
 
-    async def log_answer_event(self, session_id: str, answer_id: str, question_id: str) -> None:
+    async def log_answer_event(
+        self,
+        session_id: str,
+        answer_id: str,
+        question_id: str,
+        commit: bool = True,
+    ) -> None:
         """Log ANSWER_RECEIVED event — called by SessionOrchestrationService."""
         await self._log_event(
             session_id=session_id,
             event_type=SessionEventType.ANSWER_RECEIVED,
             payload={"answer_id": answer_id, "question_id": question_id},
         )
-        await self._db.commit()
+        await self._db.flush()
+        if commit:
+            await self._db.commit()
 
-    async def log_score_event(self, session_id: str, answer_id: str, overall_score: int) -> None:
+    async def log_score_event(
+        self,
+        session_id: str,
+        answer_id: str,
+        overall_score: int,
+        commit: bool = True,
+    ) -> None:
         """Log SCORE_GENERATED event."""
         await self._log_event(
             session_id=session_id,
             event_type=SessionEventType.SCORE_GENERATED,
             payload={"answer_id": answer_id, "overall_score": overall_score},
         )
-        await self._db.commit()
+        await self._db.flush()
+        if commit:
+            await self._db.commit()
 
     async def _log_event(
         self,

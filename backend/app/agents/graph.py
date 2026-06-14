@@ -1,6 +1,5 @@
 import asyncio
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.agents.nodes.coach import CoachNode
@@ -13,6 +12,11 @@ MAX_QUESTIONS = 5
 _evaluator = EvaluatorNode()
 _interviewer = InterviewerNode()
 _coach = CoachNode()
+
+# Set at app startup via init_interview_graph().
+# Module-level ref so session_service.py import stays unchanged.
+# None until lifespan completes — any call before startup will raise immediately.
+interview_graph = None
 
 
 async def generate_question_node(state: InterviewState) -> dict:
@@ -30,7 +34,7 @@ async def generate_question_node(state: InterviewState) -> dict:
     )
 
     new_qa: QAPair = {
-        "question_id": "",              
+        "question_id": "",
         "question_text": result["question"],
         "sequence": state["current_sequence"],
         "answer_id": None,
@@ -96,10 +100,15 @@ def route_after_answer(state: InterviewState) -> str:
     return "generate_question"
 
 
-def build_interview_graph():
+def build_interview_graph(checkpointer):
     """
     Construct and compile the LangGraph interview graph.
-    Called once at module load — returns a compiled graph ready for invocation.
+
+    checkpointer is injected — NOT created here. This keeps graph construction
+    pure and testable (pass MemorySaver in tests, AsyncPostgresSaver in prod).
+
+    Called once from init_interview_graph() at app startup — NOT at module load.
+    Module-level singleton (interview_graph) is set after this returns.
     """
     builder = StateGraph(InterviewState)
 
@@ -107,10 +116,8 @@ def build_interview_graph():
     builder.add_node("process_answer", process_answer_node)
 
     builder.set_entry_point("generate_question")
-
     builder.add_edge("generate_question", "process_answer")
 
-    # After processing: route to next question or end
     builder.add_conditional_edges(
         "process_answer",
         route_after_answer,
@@ -120,11 +127,54 @@ def build_interview_graph():
         },
     )
 
-    memory = MemorySaver()
-
     return builder.compile(
-        checkpointer=memory,
+        checkpointer=checkpointer,
         interrupt_before=["process_answer"],
     )
 
-interview_graph = build_interview_graph()
+
+async def init_interview_graph(database_url: str) -> None:
+    """
+    Initialize AsyncPostgresSaver and compile the interview graph.
+
+    Called ONCE from FastAPI lifespan at startup — before any request is served.
+    Sets the module-level `interview_graph` ref used by session_service.py.
+
+    WHY AsyncPostgresSaver.setup() instead of Alembic migration:
+      - setup() is idempotent — safe to call every startup
+      - checkpoint schema is owned by langgraph, not your app
+      - langgraph may change schema between versions
+      - manual Alembic migration would drift and break on upgrades
+      - do NOT duplicate langgraph's internal schema in your migrations
+
+    WHY psycopg (v3) not psycopg2:
+      - AsyncPostgresSaver requires psycopg v3 async interface
+      - psycopg2 has no native async support
+      - install: pip install "psycopg[async]" langgraph-checkpoint-postgres
+    """
+    global interview_graph
+
+    # Import here — psycopg[async] + langgraph-checkpoint-postgres must be installed
+    from psycopg_pool import AsyncConnectionPool
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    # Connection pool for checkpointer — separate from SQLAlchemy pool.
+    # AsyncPostgresSaver uses psycopg3 directly, not SQLAlchemy.
+    # min_size=1 at startup, max_size scales under load.
+    pool = AsyncConnectionPool(
+        conninfo=database_url,
+        min_size=1,
+        max_size=10,
+        open=False,  # open manually so we control timing
+    )
+    await pool.open()
+
+    checkpointer = AsyncPostgresSaver(pool)
+
+    # Creates checkpoints, checkpoint_blobs, checkpoint_writes,
+    # checkpoint_migrations tables if they don't exist.
+    # Idempotent — safe on every startup.
+    await checkpointer.setup()
+
+    interview_graph = build_interview_graph(checkpointer)
+    

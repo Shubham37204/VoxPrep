@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 
+from app.agents.graph import init_interview_graph
 from app.api.routes.router import router as api_router
 from app.config.settings import get_settings
 from app.db.engine import engine
@@ -10,7 +11,6 @@ from app.observability.logging import (
     configure_logging,
     get_logger,
 )
-
 from app.observability.tracing import (
     configure_tracing,
     shutdown_tracing,
@@ -37,8 +37,15 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+    # Init LangGraph with AsyncPostgresSaver.
+    # Must run AFTER DB is ready — setup() creates checkpoint tables.
+    # Uses a separate psycopg3 pool — independent of SQLAlchemy pool.
+    await init_interview_graph(settings.DATABASE_URL)
+    logger.info("interview_graph_initialized", checkpointer="AsyncPostgresSaver")
+
     yield
 
+    # ── Shutdown ───────────────────────────────────────────────────
     shutdown_tracing()
     await engine.dispose()
     logger.info("voxprep_shutdown")

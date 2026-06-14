@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError                       
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.nodes.coach import CoachNode
 from app.agents.nodes.evaluator import EvaluatorNode
 from app.agents.nodes.interviewer import InterviewerNode
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, get_session_service
 from app.models.user import User
 from app.core.enums import SessionStatus
 from app.core.exceptions import InvalidStateTransitionError, SessionNotFoundError
@@ -29,7 +29,6 @@ _evaluator = EvaluatorNode()
 _interviewer = InterviewerNode()
 _coach = CoachNode()
 _stt_service = None
-PLACEHOLDER_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 
 def _get_stt():
@@ -102,7 +101,6 @@ class SessionStateResponse(BaseModel):
 async def get_session_state(session_id: str, db: AsyncSession = Depends(get_db)):
     """
     Return current interview state from the backend.
-    Bug fix #2: frontend doesn't need to store question_id locally.
     On page refresh / device switch / browser crash:
       GET /sessions/{id}/state → resume from here.
     """
@@ -168,7 +166,11 @@ class RespondResponse(BaseModel):
 
 
 @router.post("/{session_id}/begin", response_model=BeginResponse)
-async def begin_interview(session_id: str, db: AsyncSession = Depends(get_db)):
+async def begin_interview(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    service: SessionOrchestrationService = Depends(get_session_service),
+):
     try:
         session = await SessionRepository(db).get_by_id(session_id)
     except SessionNotFoundError:
@@ -176,14 +178,17 @@ async def begin_interview(session_id: str, db: AsyncSession = Depends(get_db)):
     if session.status != SessionStatus.ACTIVE.value:
         raise HTTPException(status_code=409, detail=f"Session must be active, is {session.status}")
     try:
-        return await SessionOrchestrationService(db).begin(session_id)
+        return await service.begin(session_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Graph error: {e}")
 
 
 @router.post("/{session_id}/respond", response_model=RespondResponse)
 async def respond_to_question(
-    session_id: str, payload: RespondRequest, db: AsyncSession = Depends(get_db)
+    session_id: str,
+    payload: RespondRequest,
+    db: AsyncSession = Depends(get_db),
+    service: SessionOrchestrationService = Depends(get_session_service),
 ):
     """
     Submit answer. Duplicate submissions return 409 (UniqueConstraint on question_id).
@@ -197,13 +202,13 @@ async def respond_to_question(
     if session.status != SessionStatus.ACTIVE.value:
         raise HTTPException(status_code=409, detail=f"Session must be active, is {session.status}")
     try:
-        return await SessionOrchestrationService(db).respond(
+        return await service.respond(
             session_id=session_id,
             question_id=payload.question_id,
             transcript=payload.transcript,
             latency_ms=payload.latency_ms,
         )
-    except IntegrityError:                                     
+    except IntegrityError:
         raise HTTPException(status_code=409, detail="Answer already submitted for this question")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error: {e}")
@@ -211,7 +216,9 @@ async def respond_to_question(
 
 @router.post("/{session_id}/transcribe", response_model=TranscribeResponse)
 async def transcribe_answer(
-    session_id: str, question_id: str, audio: UploadFile = File(...),
+    session_id: str,
+    question_id: str,
+    audio: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -227,8 +234,13 @@ async def transcribe_answer(
         transcript, latency_ms = await _get_stt().transcribe(audio_bytes, audio.filename or "audio.webm")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"STT error: {e}")
+    # NOTE: transcribe endpoint creates answer directly — bypasses session_service.
+    # This is intentional: transcribe is a two-step flow (transcribe → respond separately).
+    # Does not go through Phase 1/2/3 because no graph invocation happens here.
     answer = await AnswerRepository(db).create_answer(
-        question_id=question_id, transcript=transcript, latency_ms=latency_ms
+        question_id=question_id,
+        transcript=transcript,
+        latency_ms=latency_ms,
     )
     return TranscribeResponse(transcript=transcript, latency_ms=latency_ms, answer_id=answer.id)
 
@@ -248,8 +260,10 @@ async def evaluate_answer(session_id: str, answer_id: str, db: AsyncSession = De
         raise HTTPException(status_code=404, detail="Session not found")
     try:
         scores = await _evaluator.evaluate(
-            question=question.text, transcript=answer.transcript,
-            role=session.role, difficulty=session.difficulty,
+            question=question.text,
+            transcript=answer.transcript,
+            role=session.role,
+            difficulty=session.difficulty,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Evaluator error: {e}")
