@@ -1,50 +1,54 @@
-# Environment files
+# Secrets — NEVER bake into image
 .env
 .env.*
-!.env.example
+*.env
 
-# Python bytecode/cache
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python artifacts
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+*.pyd
+.Python
+*.so
 
-# Virtual environments
+# Virtual environments — never copy into image
 .venv/
 venv/
 env/
 ENV/
 
-# Test, coverage, and type-checking output
+# Test + validation — not needed in prod image
+tests/
 .pytest_cache/
 .coverage
-.coverage.*
+coverage.xml
 htmlcov/
-.mypy_cache/
-.ruff_cache/
-.pyre/
-.tox/
-
-# Build/package artifacts
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# Runtime/local files
-logs/
 *.log
-*.pid
-*.sqlite
-*.sqlite3
-*.db
 
-# Alembic local/generated artifacts
-migrations/__pycache__/
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.egg
 
-# Editor and OS files
-.vscode/*
-!.vscode/extensions.json
+# IDE / OS
+.vscode/
 .idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
-tests/
+
+# Docker (don't recurse)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Alembic versions are needed — do NOT exclude alembic/
+# Only exclude the compiled cache
+alembic/__pycache__/

@@ -1,3 +1,13 @@
+import sys
+
+# psycopg3 (AsyncPostgresSaver) is incompatible with Windows ProactorEventLoop.
+# Python 3.12 on Windows defaults to ProactorEventLoop — force SelectorEventLoop.
+# No-op on Linux/Docker where SelectorEventLoop is already the default.
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -40,7 +50,7 @@ async def lifespan(app: FastAPI):
     # Init LangGraph with AsyncPostgresSaver.
     # Must run AFTER DB is ready — setup() creates checkpoint tables.
     # Uses a separate psycopg3 pool — independent of SQLAlchemy pool.
-    await init_interview_graph(settings.DATABASE_URL)
+    await init_interview_graph(settings.PG_DSN)
     logger.info("interview_graph_initialized", checkpointer="AsyncPostgresSaver")
 
     yield

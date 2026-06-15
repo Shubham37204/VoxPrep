@@ -166,6 +166,7 @@ async def init_interview_graph(database_url: str) -> None:
         min_size=1,
         max_size=10,
         open=False,  # open manually so we control timing
+        kwargs={"autocommit": True},
     )
     await pool.open()
 
