@@ -1,13 +1,3 @@
-import sys
-
-# psycopg3 (AsyncPostgresSaver) is incompatible with Windows ProactorEventLoop.
-# Python 3.12 on Windows defaults to ProactorEventLoop — force SelectorEventLoop.
-# No-op on Linux/Docker where SelectorEventLoop is already the default.
-if sys.platform == "win32":
-    import asyncio
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response

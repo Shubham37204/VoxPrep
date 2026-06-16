@@ -77,6 +77,8 @@ class Settings(BaseSettings):
         if "+psycopg" in url:
             return url.replace("postgresql+psycopg://", "postgresql://")
         # Already plain postgresql:// — passthrough
+        if "supabase" in url and "sslmode" not in url:
+            url += "?sslmode=require"
         return url
 
 
